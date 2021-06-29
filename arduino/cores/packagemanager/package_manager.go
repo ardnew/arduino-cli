@@ -439,6 +439,21 @@ func (pm *PackageManager) InstalledBoards() []*cores.Board {
 	return boards
 }
 
+// GetTool search for tool in all packages and platforms.
+func (pm *PackageManager) GetTool(toolId string) *cores.Tool {
+	split := strings.Split(toolId, ":")
+	if len(split) != 2 {
+		return nil
+	}
+	if pack, ok := pm.Packages[split[0]]; !ok {
+		return nil
+	} else if tool, ok := pack.Tools[split[1]]; !ok {
+		return nil
+	} else {
+		return tool
+	}
+}
+
 func (pm *PackageManager) FindToolsRequiredFromPlatformRelease(platform *cores.PlatformRelease) ([]*cores.ToolRelease, error) {
 	pm.Log.Infof("Searching tools required for platform %s", platform)
 
