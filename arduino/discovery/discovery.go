@@ -272,6 +272,10 @@ func (disc *PluggableDiscovery) Quit() error {
 	} else if msg.Message != "OK" || msg.Error {
 		return errors.Errorf("command failed: %s", msg.Message)
 	}
+	if disc.eventChan != nil {
+		close(disc.eventChan)
+		disc.eventChan = nil
+	}
 	return nil
 }
 
