@@ -323,14 +323,6 @@ func (pm *PackageManager) loadPlatformRelease(platform *cores.PlatformRelease, p
 
 	if platform.Properties.SubTree("discovery").Size() > 0 {
 		platform.PluggableDiscoveryAware = true
-
-		discoveries, err := pm.LoadDiscoveries(platform)
-		if err != nil {
-			return fmt.Errorf("loading discovery properties: %s", err)
-		}
-		for _, discovery := range discoveries {
-			pm.discoveryManager.Add(discovery)
-		}
 	}
 
 	if platform.Platform.Name == "" {
@@ -600,17 +592,25 @@ func (pm *PackageManager) LoadToolsFromBundleDirectory(toolsPath *paths.Path) er
 	return nil
 }
 
-// LoadDiscoveries returns a list of PluggableDiscoveries supported by the specfied PlatformRelease.
+// LoadDiscoveries load all discoveries for all loaded platforms
 // Returns error if:
 // * A PluggableDiscovery instance can't be created
 // * Tools required by the PlatformRelease cannot be found
 // * Command line to start PluggableDiscovery has malformed or mismatched quotes
-func (pm *PackageManager) LoadDiscoveries(release *cores.PlatformRelease) ([]*discovery.PluggableDiscovery, error) {
-	res := []*discovery.PluggableDiscovery{}
+func (pm *PackageManager) LoadDiscoveries() []*status.Status {
+	statuses := []*status.Status{}
+	for _, platform := range pm.InstalledPlatformReleases() {
+		statuses = append(statuses, pm.loadDiscoveries(platform)...)
+	}
+	return statuses
+}
+
+func (pm *PackageManager) loadDiscoveries(release *cores.PlatformRelease) []*status.Status {
+	statuses := []*status.Status{}
 	discoveryProperties := release.Properties.SubTree("discovery").Clone()
 
 	if discoveryProperties.Size() == 0 {
-		return res, nil
+		return nil
 	}
 
 	// Handles discovery properties formatted like so:
@@ -624,14 +624,19 @@ func (pm *PackageManager) LoadDiscoveries(release *cores.PlatformRelease) ([]*di
 	//
 	// If both indexed and unindexed properties are found the unindexed are ignored
 	for _, id := range discoveryProperties.ExtractSubIndexLists("required") {
-		tool := release.Platform.Package.Tools[id]
+		tool := pm.GetTool(id)
+		if tool == nil {
+			statuses = append(statuses, status.Newf(codes.FailedPrecondition, "discovery not found: %s", id))
+			continue
+		}
 		toolRelease := tool.GetLatestInstalled()
 		discoveryPath := toolRelease.InstallDir.Join(tool.Name).String()
 		d, err := discovery.New(id, discoveryPath)
 		if err != nil {
-			return nil, fmt.Errorf("creating discovery: %s", err)
+			statuses = append(statuses, status.Newf(codes.FailedPrecondition, "creating discovery: %s", err))
+			continue
 		}
-		res = append(res, d)
+		pm.discoveryManager.Add(d)
 	}
 
 	// "discovery.teensy.pattern": "\"{runtime.tools.teensy_ports.path}/hardware/tools/teensy_ports\" -J2",
@@ -647,7 +652,7 @@ func (pm *PackageManager) LoadDiscoveries(release *cores.PlatformRelease) ([]*di
 		var err error
 		tools, err = pm.FindToolsRequiredFromPlatformRelease(release)
 		if err != nil {
-			return nil, err
+			statuses = append(statuses, status.New(codes.Internal, err.Error()))
 		}
 	}
 
@@ -657,7 +662,8 @@ func (pm *PackageManager) LoadDiscoveries(release *cores.PlatformRelease) ([]*di
 	for discoveryID, props := range discoveryIDs {
 		pattern, ok := props.GetOk("pattern")
 		if !ok {
-			return nil, fmt.Errorf("can't find pattern for discovery with id %s", discoveryID)
+			statuses = append(statuses, status.Newf(codes.FailedPrecondition, "can't find pattern for discovery with id %s", discoveryID))
+			continue
 		}
 		configuration := release.Properties.Clone()
 		configuration.Merge(release.RuntimeProperties())
@@ -669,13 +675,13 @@ func (pm *PackageManager) LoadDiscoveries(release *cores.PlatformRelease) ([]*di
 
 		cmd := configuration.ExpandPropsInString(pattern)
 		if cmdArgs, err := properties.SplitQuotedString(cmd, `"'`, true); err != nil {
-			return nil, err
+			statuses = append(statuses, status.New(codes.Internal, err.Error()))
 		} else if d, err := discovery.New(discoveryID, cmdArgs...); err != nil {
-			return nil, err
+			statuses = append(statuses, status.New(codes.Internal, err.Error()))
 		} else {
-			res = append(res, d)
+			pm.discoveryManager.Add(d)
 		}
 	}
 
-	return res, nil
+	return statuses
 }
