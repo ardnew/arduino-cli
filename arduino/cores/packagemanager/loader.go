@@ -609,7 +609,7 @@ func (pm *PackageManager) LoadDiscoveries() []*status.Status {
 
 func (pm *PackageManager) loadDiscoveries(release *cores.PlatformRelease) []*status.Status {
 	statuses := []*status.Status{}
-	discoveryProperties := release.Properties.SubTree("discovery").Clone()
+	discoveryProperties := release.Properties.SubTree("discovery")
 
 	if discoveryProperties.Size() == 0 {
 		return nil
@@ -641,7 +641,6 @@ func (pm *PackageManager) loadDiscoveries(release *cores.PlatformRelease) []*sta
 		pm.discoveryManager.Add(d)
 	}
 
-	// "discovery.teensy.pattern": "\"{runtime.tools.teensy_ports.path}/hardware/tools/teensy_ports\" -J2",
 	discoveryIDs := discoveryProperties.FirstLevelOf()
 	delete(discoveryIDs, "required")
 	// Get the list of tools only we if have there are discoveries that use Direct discovery integration.
