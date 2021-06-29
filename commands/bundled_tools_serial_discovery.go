@@ -133,10 +133,10 @@ func WatchListBoards(pm *packagemanager.PackageManager) (<-chan *discovery.Event
 	return disc.EventChannel(10), nil
 }
 
-func getBuiltinSerialDiscoveryTool(pm *packagemanager.PackageManager) (*cores.ToolRelease, error) {
+func getBuiltinSerialDiscoveryTool(pm *packagemanager.PackageManager) *cores.ToolRelease {
 	builtinPackage := pm.Packages.GetOrCreatePackage("builtin")
 	serialDiscoveryTool := builtinPackage.GetOrCreateTool("serial-discovery")
 	serialDiscoveryToolRel := serialDiscoveryTool.GetOrCreateRelease(serialDiscoveryVersion)
 	serialDiscoveryToolRel.Flavors = serialDiscoveryFlavors
-	return pm.Package("builtin").Tool("serial-discovery").Release(serialDiscoveryVersion).Get()
+	return serialDiscoveryToolRel
 }
