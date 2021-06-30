@@ -481,6 +481,18 @@ func (pm *PackageManager) FindToolsRequiredFromPlatformRelease(platform *cores.P
 		requiredTools = append(requiredTools, tool)
 		delete(foundTools, tool.Tool.Name)
 	}
+
+	platform.DiscoveryDependencies.Sort()
+	for _, discoveryDep := range platform.DiscoveryDependencies {
+		pm.Log.WithField("discovery", discoveryDep).Infof("Required discovery")
+		tool := pm.FindDiscoveryDependency(discoveryDep)
+		if tool == nil {
+			return nil, fmt.Errorf("discovery release not found: %s", discoveryDep)
+		}
+		requiredTools = append(requiredTools, tool)
+		delete(foundTools, tool.Tool.Name)
+	}
+
 	for _, toolRel := range foundTools {
 		requiredTools = append(requiredTools, toolRel)
 	}
@@ -535,4 +547,14 @@ func (pm *PackageManager) FindToolDependency(dep *cores.ToolDependency) *cores.T
 		return nil
 	}
 	return toolRelease
+}
+
+func (pm *PackageManager) FindDiscoveryDependency(discovery *cores.DiscoveryDependency) *cores.ToolRelease {
+	if pack := pm.Packages[discovery.Packager]; pack == nil {
+		return nil
+	} else if toolRelease := pack.Tools[discovery.Name]; toolRelease == nil {
+		return nil
+	} else {
+		return toolRelease.GetLatestInstalled()
+	}
 }
